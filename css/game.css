@@ -1,0 +1,361 @@
+/* 
+ * Pacman Game - Main Stylesheet
+ * Modern CSS with animations and responsive design
+ */
+
+/* CSS Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    background: #000;
+    color: #fff;
+    user-select: none;
+}
+
+/* Main Game Container */
+#gameContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 10px;
+    background: linear-gradient(45deg, #000011, #001122);
+}
+
+/* Canvas Styling */
+#gameCanvas {
+    border: 3px solid #0080FF;
+    border-radius: 8px;
+    background: #000;
+    box-shadow: 
+        0 0 20px rgba(0, 128, 255, 0.5),
+        inset 0 0 20px rgba(0, 128, 255, 0.1);
+    transition: box-shadow 0.3s ease;
+}
+
+#gameCanvas:focus {
+    outline: none;
+    box-shadow: 
+        0 0 30px rgba(0, 128, 255, 0.8),
+        inset 0 0 20px rgba(0, 128, 255, 0.2);
+}
+
+/* Game UI Bar */
+#gameUI {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 800px;
+    margin-top: 20px;
+    padding: 15px 25px;
+    background: linear-gradient(90deg, 
+        rgba(0, 17, 34, 0.9), 
+        rgba(0, 51, 68, 0.9)
+    );
+    border-radius: 12px;
+    border: 2px solid #0080FF;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.score-display {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #FFFF00;
+    text-shadow: 0 0 10px rgba(255, 255, 0, 0.5);
+    letter-spacing: 1px;
+}
+
+.controls-hint {
+    font-size: 0.9em;
+    color: #AAA;
+    text-align: center;
+    line-height: 1.4;
+}
+
+.game-status {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #00FF00;
+    text-shadow: 0 0 8px rgba(0, 255, 0, 0.4);
+    text-align: right;
+    line-height: 1.3;
+}
+
+/* Loading Screen */
+#loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #000011, #001122, #000033);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: loadingBg 3s ease-in-out infinite alternate;
+}
+
+@keyframes loadingBg {
+    0% { background: linear-gradient(135deg, #000011, #001122, #000033); }
+    100% { background: linear-gradient(135deg, #001122, #000033, #000011); }
+}
+
+#loading h1 {
+    font-size: 4em;
+    font-weight: bold;
+    color: #FFFF00;
+    text-shadow: 
+        0 0 20px rgba(255, 255, 0, 0.8),
+        0 0 40px rgba(255, 255, 0, 0.4);
+    margin: 20px 0;
+    letter-spacing: 8px;
+    animation: titlePulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes titlePulse {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.05); }
+}
+
+#loading p {
+    font-size: 1.2em;
+    color: #AAA;
+    margin: 10px 0;
+}
+
+#loadingProgress {
+    font-size: 1.5em;
+    color: #00FF00;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.loading-pacman {
+    font-size: 4em;
+    animation: loading-chomp 0.8s infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes loading-chomp {
+    0% { content: '🟡'; }
+    25% { transform: rotate(-15deg); }
+    50% { content: 'C'; color: #FFFF00; }
+    75% { transform: rotate(15deg); }
+    100% { content: '🟡'; }
+}
+
+/* Game Over Screen */
+#gameOver {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.95);
+    padding: 40px;
+    border-radius: 20px;
+    text-align: center;
+    border: 3px solid #FF0000;
+    box-shadow: 
+        0 0 30px rgba(255, 0, 0, 0.5),
+        inset 0 0 20px rgba(255, 0, 0, 0.1);
+    animation: gameOverAppear 0.5s ease-out;
+}
+
+@keyframes gameOverAppear {
+    0% {
+        transform: translate(-50%, -50%) scale(0.8);
+        opacity: 0;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+}
+
+#gameOver h2 {
+    color: #FF0000;
+    font-size: 2.5em;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
+    animation: gameOverText 1s ease-in-out infinite alternate;
+}
+
+@keyframes gameOverText {
+    0% { text-shadow: 0 0 20px rgba(255, 0, 0, 0.8); }
+    100% { text-shadow: 0 0 30px rgba(255, 0, 0, 1); }
+}
+
+#gameOver p {
+    font-size: 1.3em;
+    margin: 15px 0;
+    color: #FFF;
+}
+
+#gameOver button {
+    padding: 12px 25px;
+    font-size: 1.2em;
+    font-family: inherit;
+    background: linear-gradient(45deg, #FFFF00, #FFD700);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+#gameOver button:hover {
+    background: linear-gradient(45deg, #FFD700, #FFA500);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+}
+
+#gameOver button:active {
+    transform: translateY(0);
+}
+
+/* Pause Screen */
+#pauseScreen {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.85);
+    padding: 30px 50px;
+    border-radius: 15px;
+    text-align: center;
+    border: 2px solid #FFFF00;
+    box-shadow: 0 0 25px rgba(255, 255, 0, 0.3);
+    animation: pauseScreenBlink 2s ease-in-out infinite;
+}
+
+@keyframes pauseScreenBlink {
+    0%, 100% { opacity: 0.9; }
+    50% { opacity: 1; }
+}
+
+#pauseScreen h2 {
+    color: #FFFF00;
+    font-size: 2em;
+    margin-bottom: 15px;
+    text-shadow: 0 0 15px rgba(255, 255, 0, 0.8);
+}
+
+#pauseScreen p {
+    font-size: 1.1em;
+    color: #CCC;
+}
+
+/* Responsive Design */
+@media (max-width: 900px) {
+    #gameCanvas {
+        width: min(90vw, 600px);
+        height: min(60vh, 450px);
+    }
+    
+    #gameUI {
+        width: min(90vw, 600px);
+        flex-direction: column;
+        gap: 15px;
+        padding: 20px;
+    }
+    
+    .score-display {
+        font-size: 1.3em;
+    }
+    
+    .game-status {
+        text-align: center;
+        font-size: 1.1em;
+    }
+    
+    .controls-hint {
+        font-size: 0.8em;
+    }
+    
+    #loading h1 {
+        font-size: 3em;
+        letter-spacing: 4px;
+    }
+    
+    #gameOver {
+        width: 90vw;
+        max-width: 400px;
+        padding: 30px 20px;
+    }
+    
+    #gameOver h2 {
+        font-size: 2em;
+    }
+}
+
+@media (max-width: 480px) {
+    #gameContainer {
+        padding: 5px;
+    }
+    
+    #gameCanvas {
+        width: 95vw;
+        height: 50vh;
+    }
+    
+    #gameUI {
+        width: 95vw;
+        font-size: 0.9em;
+    }
+    
+    #loading h1 {
+        font-size: 2.5em;
+        letter-spacing: 2px;
+    }
+    
+    .loading-pacman {
+        font-size: 3em;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    #gameCanvas {
+        border-color: #FFFFFF;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+    
+    #gameUI {
+        background: rgba(0, 0, 0, 0.95);
+        border-color: #FFFFFF;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+    
+    .loading-pacman {
+        animation: none;
+        content: '🟡';
+    }
+}
+
+/* Print styles (hidden) */
+@media print {
+    body {
+        display: none;
+    }
+}

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pacman Game - Interactive Web Version</title>
+    <link rel="stylesheet" href="css/game.css">
+    <link rel="stylesheet" href="css/sprites.css">
+    <style>
+        /* Critical CSS for immediate loading */
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        
+        #gameContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 10px;
+        }
+        
+        #gameCanvas {
+            border: 3px solid #0080FF;
+            background: #000;
+            box-shadow: 0 0 20px rgba(0, 128, 255, 0.5);
+        }
+        
+        #gameUI {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 800px;
+            margin-top: 20px;
+            padding: 15px;
+            background: linear-gradient(90deg, #001122, #003344);
+            border-radius: 10px;
+            border: 2px solid #0080FF;
+        }
+        
+        .score-display {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #FFFF00;
+        }
+        
+        .controls-hint {
+            font-size: 0.9em;
+            color: #AAA;
+            text-align: center;
+        }
+        
+        .game-status {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #00FF00;
+        }
+        
+        /* Loading screen */
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .loading-pacman {
+            font-size: 4em;
+            animation: loading-chomp 1s infinite;
+        }
+        
+        @keyframes loading-chomp {
+            0%, 100% { content: '🟡'; }
+            50% { content: 'C'; }
+        }
+        
+        /* Responsive design */
+        @media (max-width: 900px) {
+            #gameCanvas {
+                width: 90vw;
+                height: 60vh;
+            }
+            #gameUI {
+                width: 90vw;
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading">
+        <div class="loading-pacman">🟡</div>
+        <h1>PACMAN</h1>
+        <p>Loading game assets...</p>
+        <div id="loadingProgress">0%</div>
+    </div>
+    
+    <!-- Game Container -->
+    <div id="gameContainer" style="display: none;">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="gameUI">
+            <div class="score-display">
+                Score: <span id="score">0</span>
+            </div>
+            
+            <div class="controls-hint">
+                Use Arrow Keys to Move<br>
+                Space: Pause | R: Restart
+            </div>
+            
+            <div class="game-status">
+                <div>Level: <span id="level">1</span></div>
+                <div>Lives: <span id="lives">3</span></div>
+            </div>
+        </div>
+        
+        <!-- Game Over Screen -->
+        <div id="gameOver" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); padding: 30px; border-radius: 15px; text-align: center; border: 3px solid #FF0000;">
+            <h2 style="color: #FF0000;">GAME OVER</h2>
+            <p style="font-size: 1.2em;">Final Score: <span id="finalScore">0</span></p>
+            <button onclick="restartGame()" style="padding: 10px 20px; font-size: 1.1em; background: #FFFF00; color: #000; border: none; border-radius: 5px; cursor: pointer;">
+                Play Again
+            </button>
+        </div>
+        
+        <!-- Pause Screen -->
+        <div id="pauseScreen" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; text-align: center;">
+            <h2 style="color: #FFFF00;">PAUSED</h2>
+            <p>Press Space to Resume</p>
+        </div>
+    </div>
+    
+    <!-- JavaScript Modules -->
+    <script src="js/game.js" defer></script>
+    <script src="js/pacman.js" defer></script>
+    <script src="js/ghost.js" defer></script>
+    <script src="js/collision.js" defer></script>
+    
+    <script>
+        // Immediate game initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            // Simulate loading process
+            let progress = 0;
+            const loadingInterval = setInterval(() => {
+                progress += Math.random() * 20;
+                if (progress >= 100) {
+                    progress = 100;
+                    clearInterval(loadingInterval);
+                    
+                    // Hide loading screen and show game
+                    setTimeout(() => {
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('gameContainer').style.display = 'flex';
+                        
+                        // Initialize game if main script is loaded
+                        if (typeof initializeGame === 'function') {
+                            initializeGame();
+                        } else {
+                            // Fallback: basic canvas demo
+                            initBasicDemo();
+                        }
+                    }, 500);
+                }
+                document.getElementById('loadingProgress').textContent = Math.floor(progress) + '%';
+            }, 100);
+        });
+        
+        // Basic demo if main game scripts aren't loaded yet
+        function initBasicDemo() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Simple animated demo
+            let x = 50;
+            let direction = 1;
+            
+            function demoLoop() {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw simple Pacman
+                ctx.fillStyle = '#FFFF00';
+                ctx.beginPath();
+                ctx.arc(x, canvas.height / 2, 20, 0.2 * Math.PI, 1.8 * Math.PI);
+                ctx.lineTo(x, canvas.height / 2);
+                ctx.fill();
+                
+                // Move Pacman
+                x += direction * 2;
+                if (x > canvas.width - 20 || x < 20) {
+                    direction *= -1;
+                }
+                
+                // Draw pellets
+                ctx.fillStyle = '#FFFFFF';
+                for (let i = 100; i < canvas.width; i += 50) {
+                    ctx.beginPath();
+                    ctx.arc(i, canvas.height / 2, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+                
+                // Demo text
+                ctx.fillStyle = '#00FF00';
+                ctx.font = '20px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText('Loading Pacman Game...', canvas.width / 2, 100);
+                ctx.fillText('Full game coming soon!', canvas.width / 2, 130);
+                
+                requestAnimationFrame(demoLoop);
+            }
+            
+            demoLoop();
+        }
+        
+        // Global game control functions
+        function restartGame() {
+            document.getElementById('gameOver').style.display = 'none';
+            if (typeof resetGame === 'function') {
+                resetGame();
+            }
+        }
+        
+        // Keyboard event handling
+        document.addEventListener('keydown', (event) => {
+            switch(event.key) {
+                case ' ': // Spacebar
+                    event.preventDefault();
+                    if (typeof togglePause === 'function') {
+                        togglePause();
+                    }
+                    break;
+                case 'r':
+                case 'R':
+                    if (typeof resetGame === 'function') {
+                        resetGame();
+                    }
+                    break;
+                case 'ArrowUp':
+                case 'ArrowDown':
+                case 'ArrowLeft':
+                case 'ArrowRight':
+                    event.preventDefault();
+                    // These will be handled by the main game script
+                    break;
+            }
+        });
+        
+        // Prevent context menu on canvas
+        document.getElementById('gameCanvas').addEventListener('contextmenu', e => e.preventDefault());
+        
+        // Analytics and debugging (for development)
+        console.log('🎮 Pacman Game Initialized');
+        console.log('📱 Viewport:', window.innerWidth, 'x', window.innerHeight);
+        console.log('🖥️ Canvas:', document.getElementById('gameCanvas').width, 'x', document.getElementById('gameCanvas').height);
+        
+        // Check for Unicode 16.0 support
+        const unicodeSupport = '𜱭'.length === 2; // Should be 2 for proper Unicode support
+        console.log('🔤 Unicode 16.0 Pacman characters supported:', unicodeSupport);
+        
+        // Performance monitoring
+        let fps = 0;
+        let frameCount = 0;
+        let lastFPSUpdate = Date.now();
+        
+        function trackFPS() {
+            frameCount++;
+            const now = Date.now();
+            if (now - lastFPSUpdate >= 1000) {
+                fps = Math.round((frameCount * 1000) / (now - lastFPSUpdate));
+                frameCount = 0;
+                lastFPSUpdate = now;
+                console.log('📊 FPS:', fps);
+            }
+            requestAnimationFrame(trackFPS);
+        }
+        
+        // Start FPS tracking
+        trackFPS();
+    </script>
+</body>
+</html>

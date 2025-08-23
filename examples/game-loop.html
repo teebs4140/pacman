@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Loop - Pacman Example</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        
+        canvas {
+            border: 2px solid #fff;
+            background: #000;
+            display: block;
+            margin: 20px auto;
+        }
+        
+        .controls {
+            margin: 20px;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            background: #FFFF00;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background: #FFD700;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin: 20px auto;
+            max-width: 800px;
+        }
+        
+        .stat-panel {
+            background: #222;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        
+        .performance-graph {
+            margin: 20px;
+            padding: 15px;
+            background: #222;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Game Loop Implementation Example</h1>
+    
+    <div class="controls">
+        <button onclick="togglePause()">⏯️ <span id="pauseText">Pause</span></button>
+        <button onclick="changeTargetFPS()">🎯 Target FPS: <span id="targetFps">60</span></button>
+        <button onclick="addObject()">➕ Add Object</button>
+        <button onclick="removeObject()">➖ Remove Object</button>
+        <button onclick="resetDemo()">🔄 Reset</button>
+    </div>
+    
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    
+    <div class="stats">
+        <div class="stat-panel">
+            <h3>Performance</h3>
+            <p>FPS: <span id="currentFps">0</span></p>
+            <p>Frame Time: <span id="frameTime">0</span>ms</p>
+            <p>Delta Time: <span id="deltaTime">0</span>ms</p>
+        </div>
+        <div class="stat-panel">
+            <h3>Game State</h3>
+            <p>Objects: <span id="objectCount">0</span></p>
+            <p>Frame: <span id="frameNumber">0</span></p>
+            <p>Running Time: <span id="runningTime">0</span>s</p>
+        </div>
+        <div class="stat-panel">
+            <h3>Loop Status</h3>
+            <p>State: <span id="loopState">Running</span></p>
+            <p>Target FPS: <span id="displayTargetFps">60</span></p>
+            <p>Frame Budget: <span id="frameBudget">16.7</span>ms</p>
+        </div>
+        <div class="stat-panel">
+            <h3>Controls</h3>
+            <p>Space: Pause/Resume</p>
+            <p>R: Reset demo</p>
+            <p>+/-: Add/Remove objects</p>
+        </div>
+    </div>
+    
+    <div class="performance-graph">
+        <h3>FPS Performance Graph</h3>
+        <canvas id="graphCanvas" width="760" height="100"></canvas>
+    </div>
+    
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        
+        // Game loop variables
+        let animationId;
+        let lastTime = 0;
+        let frameNumber = 0;
+        let startTime = Date.now();
+        let isPaused = false;
+        let targetFPS = 60;
+        let frameBudget = 1000 / targetFPS;
+        
+        // Performance tracking
+        let fpsHistory = [];
+        let fpsCounter = 0;
+        let lastFpsUpdate = 0;
+        let currentFPS = 0;
+        
+        // Game objects
+        let objects = [];
+        
+        // Object class for demonstration
+        class MovingObject {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.vx = (Math.random() - 0.5) * 200; // pixels per second
+                this.vy = (Math.random() - 0.5) * 200;
+                this.size = 5 + Math.random() * 15;
+                this.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 360; // degrees per second
+            }
+            
+            update(deltaTime) {
+                // Update position based on velocity and deltaTime
+                this.x += this.vx * deltaTime;
+                this.y += this.vy * deltaTime;
+                
+                // Update rotation
+                this.rotation += this.rotationSpeed * deltaTime;
+                
+                // Bounce off walls
+                if (this.x <= this.size || this.x >= canvas.width - this.size) {
+                    this.vx *= -1;
+                    this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
+                }
+                if (this.y <= this.size || this.y >= canvas.height - this.size) {
+                    this.vy *= -1;
+                    this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+                }
+            }
+            
+            render() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation * Math.PI / 180);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Draw direction indicator
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(this.size, 0);
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+        }
+        
+        // Initialize demo objects
+        function initObjects() {
+            objects = [];
+            for (let i = 0; i < 20; i++) {
+                objects.push(new MovingObject());
+            }
+        }
+        
+        // Update game state
+        function update(deltaTime, currentTime) {
+            // Update all objects
+            for (let obj of objects) {
+                obj.update(deltaTime);
+            }
+            
+            // Update frame counter
+            frameNumber++;
+            
+            // Update FPS calculation
+            fpsCounter++;
+            if (currentTime - lastFpsUpdate >= 1000) {
+                currentFPS = Math.round(fpsCounter * 1000 / (currentTime - lastFpsUpdate));
+                fpsCounter = 0;
+                lastFpsUpdate = currentTime;
+                
+                // Store FPS for graphing
+                fpsHistory.push(currentFPS);
+                if (fpsHistory.length > graphCanvas.width) {
+                    fpsHistory.shift();
+                }
+            }
+        }
+        
+        // Render game
+        function render() {
+            // Clear canvas
+            ctx.fillStyle = '#001122';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Render all objects
+            for (let obj of objects) {
+                obj.render();
+            }
+            
+            // Render performance info on canvas
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px monospace';
+            ctx.fillText(`Objects: ${objects.length}`, 10, 20);
+            ctx.fillText(`Frame: ${frameNumber}`, 10, 40);
+            ctx.fillText(`FPS: ${currentFPS}`, 10, 60);
+        }
+        
+        // Render performance graph
+        function renderGraph() {
+            graphCtx.fillStyle = '#111';
+            graphCtx.fillRect(0, 0, graphCanvas.width, graphCanvas.height);
+            
+            if (fpsHistory.length > 1) {
+                // Draw FPS line
+                graphCtx.strokeStyle = '#00ff00';
+                graphCtx.lineWidth = 2;
+                graphCtx.beginPath();
+                
+                for (let i = 0; i < fpsHistory.length; i++) {
+                    const x = (i / (fpsHistory.length - 1)) * graphCanvas.width;
+                    const y = graphCanvas.height - (fpsHistory[i] / 120) * graphCanvas.height;
+                    
+                    if (i === 0) {
+                        graphCtx.moveTo(x, y);
+                    } else {
+                        graphCtx.lineTo(x, y);
+                    }
+                }
+                graphCtx.stroke();
+                
+                // Draw target FPS line
+                graphCtx.strokeStyle = '#ffff00';
+                graphCtx.lineWidth = 1;
+                graphCtx.setLineDash([5, 5]);
+                const targetY = graphCanvas.height - (targetFPS / 120) * graphCanvas.height;
+                graphCtx.beginPath();
+                graphCtx.moveTo(0, targetY);
+                graphCtx.lineTo(graphCanvas.width, targetY);
+                graphCtx.stroke();
+                graphCtx.setLineDash([]);
+            }
+            
+            // Draw grid
+            graphCtx.strokeStyle = '#333';
+            graphCtx.lineWidth = 1;
+            for (let fps = 0; fps <= 120; fps += 30) {
+                const y = graphCanvas.height - (fps / 120) * graphCanvas.height;
+                graphCtx.beginPath();
+                graphCtx.moveTo(0, y);
+                graphCtx.lineTo(graphCanvas.width, y);
+                graphCtx.stroke();
+                
+                graphCtx.fillStyle = '#666';
+                graphCtx.font = '10px Arial';
+                graphCtx.fillText(fps + ' FPS', 2, y - 2);
+            }
+        }
+        
+        // Update UI elements
+        function updateUI(deltaTime, frameTime) {
+            const runningTimeSeconds = (Date.now() - startTime) / 1000;
+            
+            document.getElementById('currentFps').textContent = currentFPS;
+            document.getElementById('frameTime').textContent = frameTime.toFixed(1);
+            document.getElementById('deltaTime').textContent = (deltaTime * 1000).toFixed(1);
+            document.getElementById('objectCount').textContent = objects.length;
+            document.getElementById('frameNumber').textContent = frameNumber;
+            document.getElementById('runningTime').textContent = runningTimeSeconds.toFixed(1);
+            document.getElementById('loopState').textContent = isPaused ? 'Paused' : 'Running';
+            document.getElementById('displayTargetFps').textContent = targetFPS;
+            document.getElementById('frameBudget').textContent = frameBudget.toFixed(1);
+        }
+        
+        // Main game loop
+        function gameLoop(currentTime) {
+            if (!isPaused) {
+                // Calculate delta time
+                const deltaTime = (currentTime - lastTime) / 1000; // Convert to seconds
+                const frameStartTime = performance.now();
+                
+                // Update game state
+                update(deltaTime, currentTime);
+                
+                // Render game
+                render();
+                
+                // Render performance graph
+                renderGraph();
+                
+                // Calculate frame time
+                const frameEndTime = performance.now();
+                const frameTime = frameEndTime - frameStartTime;
+                
+                // Update UI
+                updateUI(deltaTime, frameTime);
+                
+                lastTime = currentTime;
+            }
+            
+            // Request next frame
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        // Control functions
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById('pauseText').textContent = isPaused ? 'Resume' : 'Pause';
+            if (!isPaused) {
+                lastTime = performance.now(); // Reset timing when resuming
+            }
+        }
+        
+        function changeTargetFPS() {
+            const fpsOptions = [30, 60, 120];
+            const currentIndex = fpsOptions.indexOf(targetFPS);
+            targetFPS = fpsOptions[(currentIndex + 1) % fpsOptions.length];
+            frameBudget = 1000 / targetFPS;
+            document.getElementById('targetFps').textContent = targetFPS;
+        }
+        
+        function addObject() {
+            objects.push(new MovingObject());
+        }
+        
+        function removeObject() {
+            if (objects.length > 0) {
+                objects.pop();
+            }
+        }
+        
+        function resetDemo() {
+            frameNumber = 0;
+            startTime = Date.now();
+            fpsHistory = [];
+            initObjects();
+        }
+        
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case ' ':
+                    e.preventDefault();
+                    togglePause();
+                    break;
+                case 'r':
+                case 'R':
+                    resetDemo();
+                    break;
+                case '+':
+                case '=':
+                    addObject();
+                    break;
+                case '-':
+                case '_':
+                    removeObject();
+                    break;
+            }
+        });
+        
+        // Initialize and start
+        initObjects();
+        lastTime = performance.now();
+        gameLoop(lastTime);
+        
+        console.log('Game loop example started');
+        console.log('Features demonstrated:');
+        console.log('- RequestAnimationFrame loop');
+        console.log('- Delta time calculations');
+        console.log('- FPS monitoring and graphing');
+        console.log('- Performance tracking');
+        console.log('- Pause/resume functionality');
+    </script>
+</body>
+</html>

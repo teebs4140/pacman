@@ -1,0 +1,427 @@
+/*
+ * Pacman Game - Sprite Animations and Character Styles
+ * CSS-based sprite animations and character styling
+ */
+
+/* Base sprite class */
+.sprite {
+    position: absolute;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+
+/* Pacman Sprite Animations using CSS */
+.pacman-sprite {
+    width: 32px;
+    height: 32px;
+    background: #FFFF00;
+    border-radius: 50%;
+    position: relative;
+    transition: transform 0.1s ease;
+}
+
+/* Pacman mouth animations using clip-path */
+.pacman-right {
+    animation: pacman-chomp-right 0.3s linear infinite;
+}
+
+.pacman-left {
+    animation: pacman-chomp-left 0.3s linear infinite;
+    transform: rotate(180deg);
+}
+
+.pacman-up {
+    animation: pacman-chomp-up 0.3s linear infinite;
+    transform: rotate(-90deg);
+}
+
+.pacman-down {
+    animation: pacman-chomp-down 0.3s linear infinite;
+    transform: rotate(90deg);
+}
+
+/* Pacman mouth animation keyframes */
+@keyframes pacman-chomp-right {
+    0% { 
+        clip-path: polygon(100% 74%, 44% 48%, 100% 21%);
+        transform: scale(1);
+    }
+    25% { 
+        clip-path: polygon(100% 60%, 44% 48%, 100% 40%);
+        transform: scale(1.05);
+    }
+    50% { 
+        clip-path: polygon(100% 50%, 44% 48%, 100% 50%);
+        transform: scale(1.1);
+    }
+    75% { 
+        clip-path: polygon(100% 60%, 44% 48%, 100% 40%);
+        transform: scale(1.05);
+    }
+    100% { 
+        clip-path: polygon(100% 74%, 44% 48%, 100% 21%);
+        transform: scale(1);
+    }
+}
+
+@keyframes pacman-chomp-left {
+    0% { clip-path: polygon(0% 74%, 56% 48%, 0% 21%); }
+    25% { clip-path: polygon(0% 60%, 56% 48%, 0% 40%); }
+    50% { clip-path: polygon(0% 50%, 56% 48%, 0% 50%); }
+    75% { clip-path: polygon(0% 60%, 56% 48%, 0% 40%); }
+    100% { clip-path: polygon(0% 74%, 56% 48%, 0% 21%); }
+}
+
+@keyframes pacman-chomp-up {
+    0% { clip-path: polygon(74% 0%, 48% 56%, 21% 0%); }
+    25% { clip-path: polygon(60% 0%, 48% 56%, 40% 0%); }
+    50% { clip-path: polygon(50% 0%, 48% 56%, 50% 0%); }
+    75% { clip-path: polygon(60% 0%, 48% 56%, 40% 0%); }
+    100% { clip-path: polygon(74% 0%, 48% 56%, 21% 0%); }
+}
+
+@keyframes pacman-chomp-down {
+    0% { clip-path: polygon(74% 100%, 48% 44%, 21% 100%); }
+    25% { clip-path: polygon(60% 100%, 48% 44%, 40% 100%); }
+    50% { clip-path: polygon(50% 100%, 48% 44%, 50% 100%); }
+    75% { clip-path: polygon(60% 100%, 48% 44%, 40% 100%); }
+    100% { clip-path: polygon(74% 100%, 48% 44%, 21% 100%); }
+}
+
+/* Pacman eye */
+.pacman-sprite::before {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    background: #000;
+    border-radius: 50%;
+    top: 6px;
+    left: 12px;
+    animation: eye-blink 3s infinite;
+}
+
+@keyframes eye-blink {
+    0%, 95% { opacity: 1; }
+    97% { opacity: 0; }
+    100% { opacity: 1; }
+}
+
+/* Ghost Sprite Styles */
+.ghost-sprite {
+    width: 32px;
+    height: 32px;
+    position: relative;
+    animation: ghost-float 2s ease-in-out infinite alternate;
+}
+
+.ghost-red {
+    background: radial-gradient(circle at 30% 30%, #FF6666, #FF0000);
+}
+
+.ghost-pink {
+    background: radial-gradient(circle at 30% 30%, #FFB8FF, #FF69B4);
+}
+
+.ghost-cyan {
+    background: radial-gradient(circle at 30% 30%, #66FFFF, #00FFFF);
+}
+
+.ghost-orange {
+    background: radial-gradient(circle at 30% 30%, #FFCC66, #FFA500);
+}
+
+/* Ghost shape using CSS */
+.ghost-sprite {
+    border-radius: 16px 16px 0 0;
+    position: relative;
+}
+
+.ghost-sprite::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(45deg, 
+        transparent 0%, 
+        transparent 20%, 
+        currentColor 20%, 
+        currentColor 40%, 
+        transparent 40%, 
+        transparent 60%, 
+        currentColor 60%, 
+        currentColor 80%, 
+        transparent 80%, 
+        transparent 100%
+    );
+}
+
+/* Ghost eyes */
+.ghost-sprite::before {
+    content: '👀';
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    z-index: 1;
+}
+
+@keyframes ghost-float {
+    0% { 
+        transform: translateY(0px); 
+        filter: brightness(1);
+    }
+    100% { 
+        transform: translateY(-4px); 
+        filter: brightness(1.1);
+    }
+}
+
+/* Frightened ghost state */
+.ghost-frightened {
+    background: radial-gradient(circle at 30% 30%, #4444FF, #0000FF) !important;
+    animation: ghost-frightened 0.5s linear infinite;
+}
+
+@keyframes ghost-frightened {
+    0%, 100% { 
+        background: radial-gradient(circle at 30% 30%, #4444FF, #0000FF);
+    }
+    50% { 
+        background: radial-gradient(circle at 30% 30%, #FFFFFF, #CCCCCC);
+    }
+}
+
+/* Ghost eyes when frightened */
+.ghost-frightened::before {
+    content: '😨';
+}
+
+/* Dead ghost (eyes only) */
+.ghost-dead {
+    background: transparent !important;
+    animation: none;
+}
+
+.ghost-dead::before {
+    content: '👀';
+    font-size: 16px;
+    animation: ghost-dead-move 0.3s linear infinite;
+}
+
+@keyframes ghost-dead-move {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-2px); }
+}
+
+/* Pellet sprites */
+.pellet-sprite {
+    width: 8px;
+    height: 8px;
+    background: #FFFFFF;
+    border-radius: 50%;
+    position: absolute;
+    animation: pellet-glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes pellet-glow {
+    0% { 
+        box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+        transform: scale(1);
+    }
+    100% { 
+        box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+        transform: scale(1.1);
+    }
+}
+
+/* Power pellet sprites */
+.power-pellet-sprite {
+    width: 16px;
+    height: 16px;
+    background: radial-gradient(circle, #FFFFFF, #FFFF00);
+    border-radius: 50%;
+    position: absolute;
+    animation: power-pellet-pulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes power-pellet-pulse {
+    0% { 
+        transform: scale(1);
+        box-shadow: 0 0 8px rgba(255, 255, 0, 0.6);
+    }
+    100% { 
+        transform: scale(1.3);
+        box-shadow: 0 0 16px rgba(255, 255, 0, 1);
+    }
+}
+
+/* Unicode-based sprites (fallback and modern) */
+.unicode-pacman {
+    font-size: 32px;
+    line-height: 1;
+    position: absolute;
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+    animation: unicode-wiggle 1s ease-in-out infinite;
+}
+
+@keyframes unicode-wiggle {
+    0%, 100% { transform: rotate(-2deg); }
+    50% { transform: rotate(2deg); }
+}
+
+/* Unicode 16.0 Pacman characters */
+.unicode-pacman-left::before { content: '𜱫'; }
+.unicode-pacman-up::before { content: '𜱬'; }
+.unicode-pacman-right::before { content: '𜱭'; }
+.unicode-pacman-down::before { content: '𜱮'; }
+
+/* Fallback for browsers without Unicode 16.0 support */
+.unicode-fallback .unicode-pacman-left::before { content: '◐'; transform: rotate(180deg); }
+.unicode-fallback .unicode-pacman-up::before { content: '◐'; transform: rotate(-90deg); }
+.unicode-fallback .unicode-pacman-right::before { content: '◐'; }
+.unicode-fallback .unicode-pacman-down::before { content: '◐'; transform: rotate(90deg); }
+
+/* Emoji-based sprites */
+.emoji-ghost {
+    font-size: 28px;
+    position: absolute;
+    animation: emoji-bounce 1.5s ease-in-out infinite;
+}
+
+@keyframes emoji-bounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-3px) scale(1.05); }
+}
+
+/* Wall sprites */
+.wall-sprite {
+    background: linear-gradient(45deg, #0080FF, #004080);
+    border: 1px solid #00CCFF;
+    box-shadow: inset 0 0 4px rgba(0, 204, 255, 0.3);
+}
+
+.wall-horizontal {
+    height: 8px;
+    border-radius: 4px;
+}
+
+.wall-vertical {
+    width: 8px;
+    border-radius: 4px;
+}
+
+.wall-corner {
+    border-radius: 4px;
+}
+
+/* Particle effects */
+.particle {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 50%;
+    animation: particle-fade 1s ease-out forwards;
+}
+
+@keyframes particle-fade {
+    0% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(0.3) translateY(-20px);
+    }
+}
+
+/* Score text animations */
+.score-text {
+    position: absolute;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    color: #FFFF00;
+    font-size: 14px;
+    pointer-events: none;
+    animation: score-rise 1s ease-out forwards;
+    z-index: 100;
+}
+
+@keyframes score-rise {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-30px) scale(1.2);
+    }
+}
+
+/* Game element transitions */
+.sprite-transition {
+    transition: all 0.2s ease;
+}
+
+/* Collision flash effect */
+.collision-flash {
+    animation: flash-white 0.1s ease-in-out;
+}
+
+@keyframes flash-white {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(2) saturate(0); }
+}
+
+/* Responsive sprite scaling */
+@media (max-width: 600px) {
+    .pacman-sprite,
+    .ghost-sprite,
+    .unicode-pacman {
+        transform: scale(0.8);
+    }
+    
+    .pellet-sprite {
+        transform: scale(0.7);
+    }
+    
+    .power-pellet-sprite {
+        transform: scale(0.6);
+    }
+}
+
+/* High contrast mode adjustments */
+@media (prefers-contrast: high) {
+    .pacman-sprite {
+        border: 2px solid #000;
+    }
+    
+    .ghost-sprite {
+        border: 2px solid #FFF;
+    }
+    
+    .pellet-sprite,
+    .power-pellet-sprite {
+        border: 1px solid #000;
+    }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+    .pacman-sprite,
+    .ghost-sprite,
+    .pellet-sprite,
+    .power-pellet-sprite,
+    .unicode-pacman,
+    .emoji-ghost {
+        animation: none !important;
+    }
+    
+    .sprite-transition {
+        transition: none !important;
+    }
+}
