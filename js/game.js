@@ -139,6 +139,7 @@ class PacmanGame {
         
         // Initialize game objects
         this.initializeGameObjects();
+        this.updateTunnelRows();
         
         // Prepare gradients and static layers
         this.prepareBackgroundGradients();
@@ -161,6 +162,17 @@ class PacmanGame {
         // Focus management
         this.canvas.setAttribute('tabindex', '0');
         this.canvas.addEventListener('click', () => this.canvas.focus());
+    }
+    
+    // Detect side tunnel rows where both borders are open (non-walls)
+    updateTunnelRows() {
+        this.tunnelRows = new Set();
+        const cols = this.gameMap[0].length;
+        for (let y = 0; y < this.gameMap.length; y++) {
+            if (this.gameMap[y][0] !== 1 && this.gameMap[y][cols - 1] !== 1) {
+                this.tunnelRows.add(y);
+            }
+        }
     }
     
     handleKeyDown(event) {
@@ -479,6 +491,28 @@ class PacmanGame {
         const dir = directions[newDirection];
         const newX = pacman.x + dir.x * pacman.speed * deltaTime;
         const newY = pacman.y + dir.y * pacman.speed * deltaTime;
+
+        // Side tunnel wrap (only on rows with openings on both borders)
+        const gs = GAME_CONFIG.GRID_SIZE;
+        const cols = this.gameMap[0].length;
+        const row = Math.floor(pacman.y / gs);
+        if (this.tunnelRows && this.tunnelRows.has(row)) {
+            if (dir.x < 0 && pacman.x - pacman.size <= 0) {
+                pacman.direction = newDirection;
+                pacman.x = (cols - 1 + 0.5) * gs;
+                pacman.y = (row + 0.5) * gs;
+                pacman.gridX = Math.floor(pacman.x / gs);
+                pacman.gridY = row;
+                return;
+            } else if (dir.x > 0 && pacman.x + pacman.size >= cols * gs) {
+                pacman.direction = newDirection;
+                pacman.x = 0.5 * gs;
+                pacman.y = (row + 0.5) * gs;
+                pacman.gridX = Math.floor(pacman.x / gs);
+                pacman.gridY = row;
+                return;
+            }
+        }
         
         // Check if new position is valid (no walls)
         if (this.isValidPosition(newX, newY, pacman.size)) {
@@ -501,12 +535,7 @@ class PacmanGame {
             }
         }
         
-        // Handle screen wrapping
-        if (pacman.x < -pacman.size) {
-            pacman.x = GAME_CONFIG.CANVAS_WIDTH + pacman.size;
-        } else if (pacman.x > GAME_CONFIG.CANVAS_WIDTH + pacman.size) {
-            pacman.x = -pacman.size;
-        }
+        // Left/right screen wrapping handled by tunnels
     }
     
     updateGhosts(deltaTime) {
@@ -542,13 +571,18 @@ class PacmanGame {
             const newX = ghost.x + dir.x * ghost.speed * deltaTime;
             const newY = ghost.y + dir.y * ghost.speed * deltaTime;
             
-            // Handle tunnel wrapping
-            if (newX < -GAME_CONFIG.GRID_SIZE && ghost.direction === 2) {
-                ghost.x = GAME_CONFIG.CANVAS_WIDTH + GAME_CONFIG.GRID_SIZE;
-                return;
-            } else if (newX > GAME_CONFIG.CANVAS_WIDTH + GAME_CONFIG.GRID_SIZE && ghost.direction === 0) {
-                ghost.x = -GAME_CONFIG.GRID_SIZE;
-                return;
+            // Handle tunnel wrapping (only on rows with openings)
+            const gs = GAME_CONFIG.GRID_SIZE;
+            const cols = this.gameMap[0].length;
+            const row = Math.floor(ghost.y / gs);
+            if (this.tunnelRows && this.tunnelRows.has(row)) {
+                if (newX < -gs && ghost.direction === 2) {
+                    ghost.x = cols * gs + gs;
+                    return;
+                } else if (newX > cols * gs + gs && ghost.direction === 0) {
+                    ghost.x = -gs;
+                    return;
+                }
             }
             
             if (this.isValidPosition(newX, newY, ghost.size)) {
@@ -809,6 +843,7 @@ class PacmanGame {
         this.state.nextLevel();
         this.gameMap = this.createDefaultMap();
         this.countPellets();
+        this.updateTunnelRows();
         this.buildStaticLayers();
         this.resetPositions();
     }
@@ -1182,6 +1217,7 @@ class PacmanGame {
         this.gameMap = this.createDefaultMap();
         this.initializeGameObjects();
         this.countPellets();
+        this.updateTunnelRows();
         this.buildStaticLayers();
     }
     
