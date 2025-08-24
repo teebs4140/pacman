@@ -161,17 +161,9 @@ class PacmanGame {
             if (toggle) toggle.checked = true;
         }
 
-        const controls = document.getElementById('mobileControls');
-        if (controls) {
-            controls.querySelectorAll('button[data-dir]')?.forEach(btn => {
-                const dir = btn.getAttribute('data-dir');
-                const handler = (e) => { e.preventDefault(); this.applyDirection(dir); this.hapticPulse('light'); };
-                btn.addEventListener('touchstart', handler, { passive: false });
-                btn.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') handler(e); });
-            });
-            document.getElementById('btnPause')?.addEventListener('touchstart', (e) => { e.preventDefault(); this.togglePause(); this.hapticPulse('medium'); }, { passive: false });
-            document.getElementById('btnRestart')?.addEventListener('touchstart', (e) => { e.preventDefault(); this.restart(); this.hapticPulse('medium'); }, { passive: false });
-        }
+        // Action buttons only
+        document.getElementById('btnPause')?.addEventListener('touchstart', (e) => { e.preventDefault(); this.togglePause(); this.hapticPulse('medium'); }, { passive: false });
+        document.getElementById('btnRestart')?.addEventListener('touchstart', (e) => { e.preventDefault(); this.restart(); this.hapticPulse('medium'); }, { passive: false });
 
         // Swipe detection on canvas
         let sx = 0, sy = 0; const threshold = 20; // px
