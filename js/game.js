@@ -5,9 +5,11 @@
 
 // Game constants
 const GAME_CONFIG = {
-    CANVAS_WIDTH: 800,
-    CANVAS_HEIGHT: 600,
-    GRID_SIZE: 20,
+    CLASSIC_COLS: 28,
+    CLASSIC_ROWS: 31,
+    GRID_SIZE: 19,
+    get CANVAS_WIDTH() { return this.CLASSIC_COLS * this.GRID_SIZE; },
+    get CANVAS_HEIGHT() { return this.CLASSIC_ROWS * this.GRID_SIZE; },
     GAME_SPEED: 200, // pixels per second
     FPS_TARGET: 60,
     MAX_DELTA_TIME: 1/30 // Cap delta time to prevent huge jumps
@@ -89,6 +91,18 @@ class PacmanGame {
         this.walls = [];
         this.particles = [];
         
+        // Offscreen layers for performance
+        this.layers = {
+            maze: document.createElement('canvas'),
+            pellets: document.createElement('canvas')
+        };
+        this.powerPelletPositions = [];
+        this._bgGradient = null;
+        this._vignette = null;
+
+        // Visual settings
+        this.settings = { lowGlow: false };
+        
         // Input handling
         this.keys = {
             up: false,
@@ -104,19 +118,31 @@ class PacmanGame {
         this.init();
     }
     
+    // Toggle visual intensity and rebuild static layers
+    setLowGlow(enabled) {
+        this.settings.lowGlow = !!enabled;
+        this.buildStaticLayers();
+    }
+    
     init() {
         console.log('🎮 Initializing Pacman Game...');
         
-        // Set up canvas
-        this.canvas.width = GAME_CONFIG.CANVAS_WIDTH;
-        this.canvas.height = GAME_CONFIG.CANVAS_HEIGHT;
+        // Set up canvas to match map
+        this.canvas.width = this.gameMap[0].length * GAME_CONFIG.GRID_SIZE;
+        this.canvas.height = this.gameMap.length * GAME_CONFIG.GRID_SIZE;
         this.canvas.focus();
+        const ui = document.getElementById('gameUI');
+        if (ui) ui.style.width = `${this.canvas.width}px`;
         
         // Set up input handlers
         this.setupInputHandlers();
         
         // Initialize game objects
         this.initializeGameObjects();
+        
+        // Prepare gradients and static layers
+        this.prepareBackgroundGradients();
+        this.buildStaticLayers();
         
         // Start the game loop
         this.start();
@@ -190,66 +216,148 @@ class PacmanGame {
     }
     
     createDefaultMap() {
-        // Create a simple game map (will be expanded later)
-        const map = [];
-        const width = Math.floor(GAME_CONFIG.CANVAS_WIDTH / GAME_CONFIG.GRID_SIZE);
-        const height = Math.floor(GAME_CONFIG.CANVAS_HEIGHT / GAME_CONFIG.GRID_SIZE);
-        
-        for (let y = 0; y < height; y++) {
-            map[y] = [];
-            for (let x = 0; x < width; x++) {
-                // Create borders
-                if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
-                    map[y][x] = 1; // Wall
-                } else if (Math.random() < 0.1) {
-                    map[y][x] = 1; // Random walls
-                } else if (Math.random() < 0.8) {
-                    map[y][x] = 2; // Pellet
-                } else if (Math.random() < 0.05) {
-                    map[y][x] = 3; // Power pellet
-                } else {
-                    map[y][x] = 0; // Empty space
-                }
+        // Canonical arcade maze (ASCII 28×29 -> 0/1/2/3)
+        const ascii = [
+            "############################",
+            "#............##............#",
+            "#.####.#####.##.#####.####.#",
+            "#o####.#####.##.#####.####o#",
+            "#.####.#####.##.#####.####.#",
+            "#..........................#",
+            "#.####.##.########.##.####.#",
+            "#.####.##.########.##.####.#",
+            "#......##....##....##......#",
+            "######.##### ## #####.######",
+            "######.##### ## #####.######",
+            "######.##          ##.######",
+            "######.## ######## ##.######",
+            "######.## #      # ##.######",
+            "#............##............#",
+            "######.## #      # ##.######",
+            "######.## ######## ##.######",
+            "######.##          ##.######",
+            "######.## ######## ##.######",
+            "######.## ######## ##.######",
+            "#............##............#",
+            "#.####.#####.##.#####.####.#",
+            "#.####.#####.##.#####.####.#",
+            "#o..##.......  .......##..o#",
+            "###.##.##.########.##.##.###",
+            "#......##....##....##......#",
+            "#.##########.##.##########.#",
+            "#..........................#",
+            "############################"
+        ];
+        const rows = ascii.length;
+        const cols = ascii[0].length;
+        // Update game config canvas dimensions
+        GAME_CONFIG.CLASSIC_COLS = cols;
+        GAME_CONFIG.CLASSIC_ROWS = rows;
+        const map = Array.from({ length: rows }, () => Array(cols).fill(1));
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                const ch = ascii[y][x];
+                map[y][x] = ch === '#'
+                    ? 1
+                    : ch === '.'
+                    ? 2
+                    : ch === 'o'
+                    ? 3
+                    : 0;
             }
         }
-        
-        // Ensure player starting position is clear
-        map[1][1] = 0;
-        map[1][2] = 0;
-        map[2][1] = 0;
-        
         return map;
     }
     
     initializeGameObjects() {
-        // Initialize Pacman (basic version for now)
+        // Initialize Pacman near bottom center on a corridor
+        const cols = this.gameMap[0].length;
+        const rows = this.gameMap.length;
+        const startGX = Math.floor(cols / 2);
+        const startGY = rows - 2; // perimeter path row
         this.pacman = {
-            x: GAME_CONFIG.GRID_SIZE * 1.5,
-            y: GAME_CONFIG.GRID_SIZE * 1.5,
+            x: GAME_CONFIG.GRID_SIZE * (startGX + 0.5),
+            y: GAME_CONFIG.GRID_SIZE * (startGY + 0.5),
             size: GAME_CONFIG.GRID_SIZE * 0.4,
             speed: GAME_CONFIG.GAME_SPEED,
-            direction: 0, // 0: right, 1: down, 2: left, 3: up
-            targetDirection: 0,
+            direction: 2, // Start facing left
+            targetDirection: 2,
             vx: 0,
             vy: 0,
             mouthOpen: 0,
             mouthDirection: 1,
-            gridX: 1,
-            gridY: 1
+            gridX: startGX,
+            gridY: startGY
         };
         
-        // Initialize basic ghosts
+        // Initialize 4 ghosts around ghost house center
+        const ghostHouseCenterX = Math.floor(cols / 2) + 0.5;
+        const ghostHouseCenterY = Math.floor(rows / 2) + 0.5;
+        
         this.ghosts = [
             {
-                x: GAME_CONFIG.GRID_SIZE * 5,
-                y: GAME_CONFIG.GRID_SIZE * 5,
+                // Blinky (Red) - Aggressive chaser
+                x: GAME_CONFIG.GRID_SIZE * ghostHouseCenterX,
+                y: GAME_CONFIG.GRID_SIZE * (ghostHouseCenterY - 1),
                 size: GAME_CONFIG.GRID_SIZE * 0.4,
                 speed: GAME_CONFIG.GAME_SPEED * 0.8,
                 color: '#FF0000',
-                direction: 0,
-                mode: 'scatter', // scatter, chase, frightened
-                gridX: 5,
-                gridY: 5
+                name: 'Blinky',
+                personality: 'aggressive',
+                direction: 3, // Start facing up
+                mode: 'scatter',
+                gridX: Math.floor(ghostHouseCenterX),
+                gridY: Math.floor(ghostHouseCenterY - 1),
+                modeTimer: 0,
+                inGhostHouse: false
+            },
+            {
+                // Pinky (Pink) - Ambush style
+                x: GAME_CONFIG.GRID_SIZE * (ghostHouseCenterX - 1),
+                y: GAME_CONFIG.GRID_SIZE * ghostHouseCenterY,
+                size: GAME_CONFIG.GRID_SIZE * 0.4,
+                speed: GAME_CONFIG.GAME_SPEED * 0.8,
+                color: '#FFB8FF',
+                name: 'Pinky',
+                personality: 'ambush',
+                direction: 0, // Start facing right
+                mode: 'scatter',
+                gridX: Math.floor(ghostHouseCenterX - 1),
+                gridY: Math.floor(ghostHouseCenterY),
+                modeTimer: 2, // Delayed start
+                inGhostHouse: true
+            },
+            {
+                // Inky (Cyan) - Complex behavior
+                x: GAME_CONFIG.GRID_SIZE * ghostHouseCenterX,
+                y: GAME_CONFIG.GRID_SIZE * ghostHouseCenterY,
+                size: GAME_CONFIG.GRID_SIZE * 0.4,
+                speed: GAME_CONFIG.GAME_SPEED * 0.8,
+                color: '#00FFFF',
+                name: 'Inky',
+                personality: 'patrol',
+                direction: 2, // Start facing left
+                mode: 'scatter',
+                gridX: Math.floor(ghostHouseCenterX),
+                gridY: Math.floor(ghostHouseCenterY),
+                modeTimer: 4, // More delayed start
+                inGhostHouse: true
+            },
+            {
+                // Clyde (Orange) - Random behavior
+                x: GAME_CONFIG.GRID_SIZE * (ghostHouseCenterX + 1),
+                y: GAME_CONFIG.GRID_SIZE * ghostHouseCenterY,
+                size: GAME_CONFIG.GRID_SIZE * 0.4,
+                speed: GAME_CONFIG.GAME_SPEED * 0.8,
+                color: '#FFB852',
+                name: 'Clyde',
+                personality: 'random',
+                direction: 2, // Start facing left
+                mode: 'scatter',
+                gridX: Math.floor(ghostHouseCenterX + 1),
+                gridY: Math.floor(ghostHouseCenterY),
+                modeTimer: 6, // Most delayed start
+                inGhostHouse: true
             }
         ];
         
@@ -326,6 +434,15 @@ class PacmanGame {
             this.state.powerPelletTimer -= deltaTime;
             if (this.state.powerPelletTimer <= 0) {
                 this.state.powerPelletActive = false;
+                
+                // Return ghosts to normal mode
+                this.ghosts.forEach(ghost => {
+                    if (ghost.mode === 'frightened') {
+                        ghost.mode = 'scatter';
+                        ghost.speed = GAME_CONFIG.GAME_SPEED * 0.8; // Normal speed
+                        ghost.scatterTimer = 3; // Short scatter period
+                    }
+                });
             }
         }
         
@@ -393,13 +510,27 @@ class PacmanGame {
     }
     
     updateGhosts(deltaTime) {
-        // Simple ghost AI for now
         this.ghosts.forEach(ghost => {
-            // Simple random movement
-            if (Math.random() < 0.02) {
-                ghost.direction = Math.floor(Math.random() * 4);
+            // Update ghost mode timer
+            ghost.modeTimer -= deltaTime;
+            
+            // Handle ghost house exit timing
+            if (ghost.inGhostHouse && ghost.modeTimer <= 0) {
+                ghost.inGhostHouse = false;
+                ghost.y = GAME_CONFIG.GRID_SIZE * 11.5; // Move to just outside ghost house
+                ghost.direction = 3; // Face up
+                ghost.mode = 'scatter';
             }
             
+            // Skip movement if still waiting in ghost house
+            if (ghost.inGhostHouse) {
+                return;
+            }
+            
+            // Update AI behavior based on personality and mode
+            this.updateGhostAI(ghost, deltaTime);
+            
+            // Move ghost
             const directions = [
                 { x: 1, y: 0 },   // right
                 { x: 0, y: 1 },   // down
@@ -411,16 +542,159 @@ class PacmanGame {
             const newX = ghost.x + dir.x * ghost.speed * deltaTime;
             const newY = ghost.y + dir.y * ghost.speed * deltaTime;
             
+            // Handle tunnel wrapping
+            if (newX < -GAME_CONFIG.GRID_SIZE && ghost.direction === 2) {
+                ghost.x = GAME_CONFIG.CANVAS_WIDTH + GAME_CONFIG.GRID_SIZE;
+                return;
+            } else if (newX > GAME_CONFIG.CANVAS_WIDTH + GAME_CONFIG.GRID_SIZE && ghost.direction === 0) {
+                ghost.x = -GAME_CONFIG.GRID_SIZE;
+                return;
+            }
+            
             if (this.isValidPosition(newX, newY, ghost.size)) {
                 ghost.x = newX;
                 ghost.y = newY;
                 ghost.gridX = Math.floor(ghost.x / GAME_CONFIG.GRID_SIZE);
                 ghost.gridY = Math.floor(ghost.y / GAME_CONFIG.GRID_SIZE);
             } else {
-                // Change direction if hit wall
-                ghost.direction = Math.floor(Math.random() * 4);
+                // Choose new direction when hitting wall
+                this.chooseGhostDirection(ghost);
             }
         });
+    }
+    
+    updateGhostAI(ghost, deltaTime) {
+        // Get target based on mode and personality
+        let target = this.getGhostTarget(ghost);
+        
+        // Switch between scatter and chase modes
+        if (ghost.mode === 'scatter') {
+            // Scatter for 7 seconds, then chase for 20 seconds
+            if (!ghost.scatterTimer) ghost.scatterTimer = 7;
+            ghost.scatterTimer -= deltaTime;
+            if (ghost.scatterTimer <= 0) {
+                ghost.mode = 'chase';
+                ghost.chaseTimer = 20;
+            }
+        } else if (ghost.mode === 'chase') {
+            if (!ghost.chaseTimer) ghost.chaseTimer = 20;
+            ghost.chaseTimer -= deltaTime;
+            if (ghost.chaseTimer <= 0) {
+                ghost.mode = 'scatter';
+                ghost.scatterTimer = 7;
+            }
+        }
+        
+        // Update direction towards target occasionally
+        if (!ghost.lastDirectionUpdate) ghost.lastDirectionUpdate = 0;
+        ghost.lastDirectionUpdate += deltaTime;
+        
+        if (ghost.lastDirectionUpdate > 0.5) { // Update direction every 0.5 seconds
+            ghost.lastDirectionUpdate = 0;
+            this.chooseGhostDirection(ghost, target);
+        }
+    }
+    
+    getGhostTarget(ghost) {
+        const pacman = this.pacman;
+        
+        if (ghost.mode === 'frightened') {
+            // Random target when frightened
+            return {
+                x: Math.random() * GAME_CONFIG.CANVAS_WIDTH,
+                y: Math.random() * GAME_CONFIG.CANVAS_HEIGHT
+            };
+        }
+        
+        if (ghost.mode === 'scatter') {
+            // Go to home corner
+            const corners = {
+                'Blinky': { x: GAME_CONFIG.CANVAS_WIDTH - 40, y: 40 },
+                'Pinky': { x: 40, y: 40 },
+                'Inky': { x: GAME_CONFIG.CANVAS_WIDTH - 40, y: GAME_CONFIG.CANVAS_HEIGHT - 40 },
+                'Clyde': { x: 40, y: GAME_CONFIG.CANVAS_HEIGHT - 40 }
+            };
+            return corners[ghost.name] || { x: pacman.x, y: pacman.y };
+        }
+        
+        // Chase mode - behavior based on personality
+        switch (ghost.personality) {
+            case 'aggressive': // Blinky - direct chase
+                return { x: pacman.x, y: pacman.y };
+                
+            case 'ambush': // Pinky - aim 4 tiles ahead of Pacman
+                const directions = [
+                    { x: 4 * GAME_CONFIG.GRID_SIZE, y: 0 },
+                    { x: 0, y: 4 * GAME_CONFIG.GRID_SIZE },
+                    { x: -4 * GAME_CONFIG.GRID_SIZE, y: 0 },
+                    { x: 0, y: -4 * GAME_CONFIG.GRID_SIZE }
+                ];
+                const dir = directions[pacman.direction];
+                return {
+                    x: pacman.x + dir.x,
+                    y: pacman.y + dir.y
+                };
+                
+            case 'patrol': // Inky - complex behavior
+                const distance = Math.sqrt(
+                    Math.pow(pacman.x - ghost.x, 2) + Math.pow(pacman.y - ghost.y, 2)
+                );
+                if (distance > 8 * GAME_CONFIG.GRID_SIZE) {
+                    return { x: pacman.x, y: pacman.y };
+                } else {
+                    return { x: 40, y: GAME_CONFIG.CANVAS_HEIGHT - 40 }; // Retreat
+                }
+                
+            case 'random': // Clyde - random with some chase
+                if (Math.random() < 0.7) {
+                    return { x: pacman.x, y: pacman.y };
+                } else {
+                    return {
+                        x: Math.random() * GAME_CONFIG.CANVAS_WIDTH,
+                        y: Math.random() * GAME_CONFIG.CANVAS_HEIGHT
+                    };
+                }
+                
+            default:
+                return { x: pacman.x, y: pacman.y };
+        }
+    }
+    
+    chooseGhostDirection(ghost, target = null) {
+        if (!target) {
+            target = this.getGhostTarget(ghost);
+        }
+        
+        const directions = [
+            { x: 1, y: 0, dir: 0 },   // right
+            { x: 0, y: 1, dir: 1 },   // down
+            { x: -1, y: 0, dir: 2 },  // left
+            { x: 0, y: -1, dir: 3 }   // up
+        ];
+        
+        let bestDirection = ghost.direction;
+        let bestDistance = Infinity;
+        
+        directions.forEach(d => {
+            // Don't reverse direction unless necessary
+            if (d.dir === (ghost.direction + 2) % 4 && Math.random() > 0.2) return;
+            
+            const newX = ghost.x + d.x * ghost.speed * 0.1;
+            const newY = ghost.y + d.y * ghost.speed * 0.1;
+            
+            if (this.isValidPosition(newX, newY, ghost.size)) {
+                const distance = Math.sqrt(
+                    Math.pow(target.x - newX, 2) + Math.pow(target.y - newY, 2)
+                );
+                
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestDirection = d.dir;
+                }
+            }
+        });
+        
+        ghost.direction = bestDirection;
     }
     
     updateParticles(deltaTime) {
@@ -465,6 +739,7 @@ class PacmanGame {
                 this.state.addScore(10);
                 this.state.pelletsRemaining--;
                 this.createScoreParticle(pacman.x, pacman.y, 10);
+                this.clearPelletAt(gridX, gridY);
             } else if (this.gameMap[gridY][gridX] === 3) { // Power pellet
                 this.gameMap[gridY][gridX] = 0;
                 this.state.addScore(50);
@@ -472,6 +747,22 @@ class PacmanGame {
                 this.state.powerPelletActive = true;
                 this.state.powerPelletTimer = 8; // 8 seconds
                 this.createScoreParticle(pacman.x, pacman.y, 50);
+                this.clearPelletAt(gridX, gridY);
+                // Remove from power pellet positions cache
+                this.powerPelletPositions = this.powerPelletPositions.filter(p => {
+                    const gx = Math.floor(p.x / GAME_CONFIG.GRID_SIZE);
+                    const gy = Math.floor(p.y / GAME_CONFIG.GRID_SIZE);
+                    return !(gx === gridX && gy === gridY);
+                });
+                
+                // Set all ghosts to frightened mode
+                this.ghosts.forEach(ghost => {
+                    if (!ghost.inGhostHouse && ghost.mode !== 'dead') {
+                        ghost.mode = 'frightened';
+                        ghost.speed = GAME_CONFIG.GAME_SPEED * 0.6; // Slower when frightened
+                        ghost.direction = (ghost.direction + 2) % 4; // Reverse direction
+                    }
+                });
             }
         }
         
@@ -518,128 +809,313 @@ class PacmanGame {
         this.state.nextLevel();
         this.gameMap = this.createDefaultMap();
         this.countPellets();
+        this.buildStaticLayers();
         this.resetPositions();
     }
     
     render() {
-        // Clear canvas
-        this.ctx.fillStyle = '#000011';
+        // Background (cached)
+        this.ctx.fillStyle = this._bgGradient || '#000010';
         this.ctx.fillRect(0, 0, GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT);
-        
-        // Render game map
+
+        // Map layers
         this.renderMap();
-        
-        // Render game objects
+
+        // Dynamic objects
         this.renderPacman();
         this.renderGhosts();
         this.renderParticles();
-        
-        // Render debug info
+
+        // Vignette overlay (cached)
+        if (this._vignette) {
+            this.ctx.fillStyle = this._vignette;
+            this.ctx.fillRect(0, 0, GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT);
+        }
+
+        // Debug
         this.renderDebugInfo();
     }
     
     renderMap() {
-        const ctx = this.ctx;
+        // Draw cached layers
+        this.ctx.drawImage(this.layers.maze, 0, 0);
+        this.ctx.drawImage(this.layers.pellets, 0, 0);
         
-        for (let y = 0; y < this.gameMap.length; y++) {
-            for (let x = 0; x < this.gameMap[y].length; x++) {
-                const cellX = x * GAME_CONFIG.GRID_SIZE;
-                const cellY = y * GAME_CONFIG.GRID_SIZE;
-                
-                switch (this.gameMap[y][x]) {
-                    case 1: // Wall
-                        ctx.fillStyle = '#0080FF';
-                        ctx.fillRect(cellX, cellY, GAME_CONFIG.GRID_SIZE, GAME_CONFIG.GRID_SIZE);
-                        break;
-                    case 2: // Pellet
-                        ctx.fillStyle = '#FFFFFF';
-                        ctx.beginPath();
-                        ctx.arc(
-                            cellX + GAME_CONFIG.GRID_SIZE / 2,
-                            cellY + GAME_CONFIG.GRID_SIZE / 2,
-                            3, 0, Math.PI * 2
-                        );
-                        ctx.fill();
-                        break;
-                    case 3: // Power pellet
-                        ctx.fillStyle = '#FFFF00';
-                        ctx.beginPath();
-                        ctx.arc(
-                            cellX + GAME_CONFIG.GRID_SIZE / 2,
-                            cellY + GAME_CONFIG.GRID_SIZE / 2,
-                            6, 0, Math.PI * 2
-                        );
-                        ctx.fill();
-                        break;
+        // Animate power pellets lightly
+        if (this.powerPelletPositions.length) {
+            const t = performance.now() / 1000;
+            const pulse = 0.9 + (this.settings.lowGlow ? 0.05 : 0.25) * Math.sin(t * 5);
+            this.ctx.shadowColor = '#ffff66';
+            this.ctx.shadowBlur = this.settings.lowGlow ? 2 : 6;
+            this.powerPelletPositions.forEach(({x, y}) => {
+                this.ctx.fillStyle = '#ffef6e';
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, 6 * pulse, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+            this.ctx.shadowBlur = 0;
+        }
+    }
+
+    // Build static offscreen layers from the current map
+    buildStaticLayers() {
+        const W = GAME_CONFIG.CANVAS_WIDTH;
+        const H = GAME_CONFIG.CANVAS_HEIGHT;
+        const gs = GAME_CONFIG.GRID_SIZE;
+        const rows = this.gameMap.length;
+        const cols = this.gameMap[0]?.length || 0;
+
+        this.layers.maze.width = W; this.layers.maze.height = H;
+        this.layers.pellets.width = W; this.layers.pellets.height = H;
+        this.powerPelletPositions = [];
+
+        const mctx = this.layers.maze.getContext('2d');
+        mctx.clearRect(0, 0, W, H);
+        mctx.lineJoin = 'round';
+        mctx.lineCap = 'round';
+
+        const glowPrimary = '#2fb5ff';
+        const glowInner = '#1050ff';
+        const baseStroke = '#0e3bd6';
+
+        const drawEdge = (x1, y1, x2, y2) => {
+            const scale = this.settings.lowGlow ? 0.5 : 1;
+            // Outer glow
+            mctx.shadowColor = glowPrimary;
+            mctx.shadowBlur = 3 * scale;
+            mctx.strokeStyle = glowPrimary;
+            mctx.lineWidth = 3.5 * scale;
+            mctx.beginPath();
+            mctx.moveTo(x1, y1);
+            mctx.lineTo(x2, y2);
+            mctx.stroke();
+
+            // Inner glow
+            mctx.shadowColor = glowInner;
+            mctx.shadowBlur = 2 * scale;
+            mctx.strokeStyle = glowInner;
+            mctx.lineWidth = 2.5 * scale;
+            mctx.beginPath();
+            mctx.moveTo(x1, y1);
+            mctx.lineTo(x2, y2);
+            mctx.stroke();
+
+            // Core
+            mctx.shadowBlur = 0;
+            mctx.strokeStyle = baseStroke;
+            mctx.lineWidth = 1.2 * scale;
+            mctx.beginPath();
+            mctx.moveTo(x1, y1);
+            mctx.lineTo(x2, y2);
+            mctx.stroke();
+        };
+
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                if (this.gameMap[y][x] !== 1) continue;
+                const cx = x * gs;
+                const cy = y * gs;
+                const up = y > 0 ? this.gameMap[y - 1][x] === 1 : false;
+                const down = y < rows - 1 ? this.gameMap[y + 1][x] === 1 : false;
+                const left = x > 0 ? this.gameMap[y][x - 1] === 1 : false;
+                const right = x < cols - 1 ? this.gameMap[y][x + 1] === 1 : false;
+                if (!up) drawEdge(cx + 3, cy + 3, cx + gs - 3, cy + 3);
+                if (!down) drawEdge(cx + 3, cy + gs - 3, cx + gs - 3, cy + gs - 3);
+                if (!left) drawEdge(cx + 3, cy + 3, cx + 3, cy + gs - 3);
+                if (!right) drawEdge(cx + gs - 3, cy + 3, cx + gs - 3, cy + gs - 3);
+            }
+        }
+
+        // Pellets layer
+        const pctx = this.layers.pellets.getContext('2d');
+        pctx.clearRect(0, 0, W, H);
+        pctx.fillStyle = '#ffffff';
+        for (let y = 0; y < rows; y++) {
+            for (let x = 0; x < cols; x++) {
+                const cell = this.gameMap[y][x];
+                if (cell === 2 || cell === 3) {
+                    const cx = x * gs + gs / 2;
+                    const cy = y * gs + gs / 2;
+                    if (cell === 2) {
+                        pctx.beginPath();
+                        pctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+                        pctx.fill();
+                    } else {
+                        pctx.fillStyle = '#ffef6e';
+                        pctx.beginPath();
+                        pctx.arc(cx, cy, 4, 0, Math.PI * 2);
+                        pctx.fill();
+                        pctx.fillStyle = '#ffffff';
+                        this.powerPelletPositions.push({ x: cx, y: cy });
+                    }
                 }
             }
         }
     }
+
+    // Clear a pellet cell on the offscreen pellet layer
+    clearPelletAt(gridX, gridY) {
+        const gs = GAME_CONFIG.GRID_SIZE;
+        const pctx = this.layers.pellets.getContext('2d');
+        pctx.clearRect(gridX * gs, gridY * gs, gs, gs);
+    }
+
+    // Cache background gradients once
+    prepareBackgroundGradients() {
+        const cx = GAME_CONFIG.CANVAS_WIDTH * 0.5;
+        const cy = GAME_CONFIG.CANVAS_HEIGHT * 0.45;
+        const inner = Math.min(GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT) * 0.1;
+        const outer = Math.max(GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT) * 0.8;
+        const bg = this.ctx.createRadialGradient(cx, cy, inner, cx, cy, outer);
+        bg.addColorStop(0, '#000015');
+        bg.addColorStop(1, '#000006');
+        this._bgGradient = bg;
+
+        const vcx = GAME_CONFIG.CANVAS_WIDTH / 2;
+        const vcy = GAME_CONFIG.CANVAS_HEIGHT / 2;
+        const vInner = Math.min(GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT) * 0.55;
+        const vOuter = Math.min(GAME_CONFIG.CANVAS_WIDTH, GAME_CONFIG.CANVAS_HEIGHT) * 0.9;
+        const vg = this.ctx.createRadialGradient(vcx, vcy, vInner, vcx, vcy, vOuter);
+        vg.addColorStop(0, 'rgba(0,0,0,0)');
+        vg.addColorStop(1, 'rgba(0,0,0,0.4)');
+        this._vignette = vg;
+    }
+    
+    // Helper function to draw rounded rectangles
+    drawRoundedRect(ctx, x, y, width, height, radius) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fill();
+    }
     
     renderPacman() {
         const ctx = this.ctx;
-        const pacman = this.pacman;
-        
+        const p = this.pacman;
+
         ctx.save();
-        ctx.translate(pacman.x, pacman.y);
-        ctx.rotate(pacman.direction * Math.PI / 2);
-        
-        // Draw Pacman with mouth animation
-        ctx.fillStyle = '#FFFF00';
-        const mouthAngle = pacman.mouthOpen * 0.7;
-        
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.direction * Math.PI / 2);
+
+        const mouthAngle = p.mouthOpen * 0.7 + 0.05; // slight minimum opening for style
+
+        // Glow and body
+        ctx.shadowColor = '#ffd54f';
+        ctx.shadowBlur = this.settings.lowGlow ? 4 : 12;
+        const bodyGrad = ctx.createRadialGradient(0, -p.size * 0.6, p.size * 0.2, 0, 0, p.size);
+        bodyGrad.addColorStop(0, '#fff176');
+        bodyGrad.addColorStop(1, '#ffeb3b');
+        ctx.fillStyle = bodyGrad;
         ctx.beginPath();
-        ctx.arc(0, 0, pacman.size, mouthAngle, 2 * Math.PI - mouthAngle);
+        ctx.arc(0, 0, p.size, mouthAngle, 2 * Math.PI - mouthAngle);
         ctx.lineTo(0, 0);
         ctx.fill();
-        
-        // Draw eye
+
+        // Outline for definition
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#c9a800';
+        ctx.lineWidth = this.settings.lowGlow ? 1 : 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, p.size, mouthAngle, 2 * Math.PI - mouthAngle);
+        ctx.lineTo(0, 0);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Eye (slightly glossy)
         ctx.fillStyle = '#000000';
         ctx.beginPath();
-        ctx.arc(-pacman.size * 0.3, -pacman.size * 0.3, pacman.size * 0.15, 0, Math.PI * 2);
+        ctx.arc(-p.size * 0.28, -p.size * 0.32, p.size * 0.14, 0, Math.PI * 2);
         ctx.fill();
-        
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath();
+        ctx.arc(-p.size * 0.24, -p.size * 0.36, p.size * 0.06, 0, Math.PI * 2);
+        ctx.fill();
+
         ctx.restore();
     }
     
     renderGhosts() {
         const ctx = this.ctx;
         
-        this.ghosts.forEach(ghost => {
+        this.ghosts.forEach(g => {
             ctx.save();
-            ctx.translate(ghost.x, ghost.y);
-            
-            // Ghost body
-            ctx.fillStyle = this.state.powerPelletActive ? '#0000FF' : ghost.color;
+            ctx.translate(g.x, g.y);
+
+            // Determine color based on mode
+            const baseColor = this.state.powerPelletActive ? '#224BFF' : g.color;
+            const highlight = this.state.powerPelletActive ? '#91a4ff' : '#ffffff';
+
+            // Body gradient for depth
+            const grad = ctx.createLinearGradient(0, -g.size, 0, g.size);
+            grad.addColorStop(0, highlight + '11');
+            grad.addColorStop(0.2, highlight + '22');
+            grad.addColorStop(1, baseColor);
+
+            // Glow
+            ctx.shadowColor = baseColor;
+            ctx.shadowBlur = this.settings.lowGlow ? 4 : 10;
+
+            // Head (semi-circle) and torso
+            ctx.fillStyle = grad;
             ctx.beginPath();
-            ctx.arc(0, -ghost.size * 0.2, ghost.size, 0, Math.PI, true);
-            ctx.rect(-ghost.size, -ghost.size * 0.2, ghost.size * 2, ghost.size * 1.2);
+            ctx.arc(0, -g.size * 0.2, g.size, Math.PI, 0, false);
+            ctx.lineTo(g.size, g.size * 0.9);
+            ctx.lineTo(-g.size, g.size * 0.9);
+            ctx.closePath();
             ctx.fill();
-            
-            // Ghost bottom (wavy)
+
+            // Wavy bottom
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = baseColor;
+            const bumps = 4;
+            const width = g.size * 2;
+            const leftX = -g.size;
+            const bottomY = g.size * 0.9;
             ctx.beginPath();
-            ctx.moveTo(-ghost.size, ghost.size);
-            ctx.lineTo(-ghost.size * 0.5, ghost.size * 0.7);
-            ctx.lineTo(0, ghost.size);
-            ctx.lineTo(ghost.size * 0.5, ghost.size * 0.7);
-            ctx.lineTo(ghost.size, ghost.size);
-            ctx.lineTo(ghost.size, ghost.size * 0.2);
-            ctx.lineTo(-ghost.size, ghost.size * 0.2);
+            ctx.moveTo(leftX, bottomY);
+            for (let i = 0; i < bumps; i++) {
+                const sx = leftX + (i * width) / bumps;
+                const mx = leftX + ((i + 0.5) * width) / bumps;
+                const ex = leftX + ((i + 1) * width) / bumps;
+                ctx.quadraticCurveTo(mx, bottomY + g.size * 0.25, ex, bottomY);
+            }
+            ctx.lineTo(g.size, bottomY);
+            ctx.lineTo(g.size, -g.size * 0.2);
+            ctx.lineTo(-g.size, -g.size * 0.2);
+            ctx.closePath();
             ctx.fill();
-            
+
             // Eyes
+            const eyeY = -g.size * 0.15;
+            const eyeOffset = g.size * 0.42;
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
-            ctx.arc(-ghost.size * 0.3, -ghost.size * 0.3, ghost.size * 0.2, 0, Math.PI * 2);
-            ctx.arc(ghost.size * 0.3, -ghost.size * 0.3, ghost.size * 0.2, 0, Math.PI * 2);
+            ctx.arc(-eyeOffset, eyeY, g.size * 0.28, 0, Math.PI * 2);
+            ctx.arc(eyeOffset, eyeY, g.size * 0.28, 0, Math.PI * 2);
             ctx.fill();
-            
-            ctx.fillStyle = '#000000';
+
+            // Pupils with direction offset
+            ctx.fillStyle = '#0b1957';
+            let px = 0, py = 0;
+            switch (g.direction) {
+                case 0: px = g.size * 0.12; break; // right
+                case 1: py = g.size * 0.12; break; // down
+                case 2: px = -g.size * 0.12; break; // left
+                case 3: py = -g.size * 0.12; break; // up
+            }
             ctx.beginPath();
-            ctx.arc(-ghost.size * 0.3, -ghost.size * 0.3, ghost.size * 0.1, 0, Math.PI * 2);
-            ctx.arc(ghost.size * 0.3, -ghost.size * 0.3, ghost.size * 0.1, 0, Math.PI * 2);
+            ctx.arc(-eyeOffset + px, eyeY + py, g.size * 0.16, 0, Math.PI * 2);
+            ctx.arc(eyeOffset + px, eyeY + py, g.size * 0.16, 0, Math.PI * 2);
             ctx.fill();
-            
+
             ctx.restore();
         });
     }
@@ -706,6 +1182,7 @@ class PacmanGame {
         this.gameMap = this.createDefaultMap();
         this.initializeGameObjects();
         this.countPellets();
+        this.buildStaticLayers();
     }
     
     destroy() {

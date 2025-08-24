@@ -128,6 +128,11 @@
                 <div>Level: <span id="level">1</span></div>
                 <div>Lives: <span id="lives">3</span></div>
             </div>
+            <div class="visual-toggle" style="display:flex; align-items:center; gap:6px; color:#ccc;">
+                <label for="lowGlowToggle" style="cursor:pointer;">
+                    <input type="checkbox" id="lowGlowToggle" style="vertical-align:middle;"> Low Glow
+                </label>
+            </div>
         </div>
         
         <!-- Game Over Screen -->
@@ -236,30 +241,7 @@
             }
         }
         
-        // Keyboard event handling
-        document.addEventListener('keydown', (event) => {
-            switch(event.key) {
-                case ' ': // Spacebar
-                    event.preventDefault();
-                    if (typeof togglePause === 'function') {
-                        togglePause();
-                    }
-                    break;
-                case 'r':
-                case 'R':
-                    if (typeof resetGame === 'function') {
-                        resetGame();
-                    }
-                    break;
-                case 'ArrowUp':
-                case 'ArrowDown':
-                case 'ArrowLeft':
-                case 'ArrowRight':
-                    event.preventDefault();
-                    // These will be handled by the main game script
-                    break;
-            }
-        });
+        // Note: Keyboard input is handled in js/game.js to avoid double toggles
         
         // Prevent context menu on canvas
         document.getElementById('gameCanvas').addEventListener('contextmenu', e => e.preventDefault());
@@ -290,6 +272,16 @@
             requestAnimationFrame(trackFPS);
         }
         
+        // Wire visual toggle
+        const lowGlowToggle = document.getElementById('lowGlowToggle');
+        if (lowGlowToggle) {
+            lowGlowToggle.addEventListener('change', (e) => {
+                if (window.game && typeof window.game.setLowGlow === 'function') {
+                    window.game.setLowGlow(e.target.checked);
+                }
+            });
+        }
+
         // Start FPS tracking
         trackFPS();
     </script>
