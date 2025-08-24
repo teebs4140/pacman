@@ -127,15 +127,15 @@ class PacmanGame {
     init() {
         console.log('🎮 Initializing Pacman Game...');
         
-        // Set up canvas to match map
-        this.canvas.width = this.gameMap[0].length * GAME_CONFIG.GRID_SIZE;
-        this.canvas.height = this.gameMap.length * GAME_CONFIG.GRID_SIZE;
+        // Mobile-friendly: compute GRID_SIZE to fit viewport and size canvas
+        this.resizeToViewport(true);
         this.canvas.focus();
         const ui = document.getElementById('gameUI');
         if (ui) ui.style.width = `${this.canvas.width}px`;
         
         // Set up input handlers
         this.setupInputHandlers();
+        this.attachTouchControls();
         
         // Initialize game objects
         this.initializeGameObjects();
@@ -149,6 +149,97 @@ class PacmanGame {
         this.start();
         
         console.log('✅ Game initialized successfully!');
+    }
+    
+    // Attach D-pad and swipe gestures (mobile)
+    attachTouchControls() {
+        const mobile = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        if (mobile) {
+            // Default to Low Glow on mobile
+            this.settings.lowGlow = true;
+            const toggle = document.getElementById('lowGlowToggle');
+            if (toggle) toggle.checked = true;
+        }
+
+        const controls = document.getElementById('mobileControls');
+        if (controls) {
+            controls.querySelectorAll('button[data-dir]')?.forEach(btn => {
+                const dir = btn.getAttribute('data-dir');
+                const handler = (e) => { e.preventDefault(); this.applyDirection(dir); this.hapticPulse('light'); };
+                btn.addEventListener('touchstart', handler, { passive: false });
+                btn.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') handler(e); });
+            });
+            document.getElementById('btnPause')?.addEventListener('touchstart', (e) => { e.preventDefault(); this.togglePause(); this.hapticPulse('medium'); }, { passive: false });
+            document.getElementById('btnRestart')?.addEventListener('touchstart', (e) => { e.preventDefault(); this.restart(); this.hapticPulse('medium'); }, { passive: false });
+        }
+
+        // Swipe detection on canvas
+        let sx = 0, sy = 0; const threshold = 20; // px
+        this.canvas.addEventListener('touchstart', (e) => {
+            const t = e.changedTouches[0]; sx = t.clientX; sy = t.clientY;
+        }, { passive: true });
+        this.canvas.addEventListener('touchend', (e) => {
+            const t = e.changedTouches[0]; const dx = t.clientX - sx; const dy = t.clientY - sy;
+            if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
+            if (Math.abs(dx) > Math.abs(dy)) this.applyDirection(dx > 0 ? 'right' : 'left');
+            else this.applyDirection(dy > 0 ? 'down' : 'up');
+            this.hapticPulse('light');
+        }, { passive: true });
+    }
+
+    // Apply a direction intent from touch/D-pad
+    applyDirection(dir) {
+        this.keys.up = this.keys.down = this.keys.left = this.keys.right = false;
+        if (dir === 'up') this.keys.up = true;
+        if (dir === 'down') this.keys.down = true;
+        if (dir === 'left') this.keys.left = true;
+        if (dir === 'right') this.keys.right = true;
+    }
+
+    // Compute GRID_SIZE for viewport and size canvas; rebuild layers on resize
+    resizeToViewport(initial = false) {
+        const cols = this.gameMap[0].length;
+        const rows = this.gameMap.length;
+        const vw = window.innerWidth; const vh = window.innerHeight;
+        const gridW = Math.floor((vw - 20) / cols);
+        const gridH = Math.floor((vh - 150) / rows);
+        const newGS = Math.max(12, Math.min(gridW, gridH));
+        if (newGS && GAME_CONFIG.GRID_SIZE !== newGS) GAME_CONFIG.GRID_SIZE = newGS;
+        this.canvas.width = cols * GAME_CONFIG.GRID_SIZE;
+        this.canvas.height = rows * GAME_CONFIG.GRID_SIZE;
+        const ui = document.getElementById('gameUI');
+        if (ui) ui.style.width = `${this.canvas.width}px`;
+        if (!initial && this.pacman) {
+            const gs = GAME_CONFIG.GRID_SIZE;
+            this.pacman.x = (this.pacman.gridX + 0.5) * gs;
+            this.pacman.y = (this.pacman.gridY + 0.5) * gs;
+            this.ghosts.forEach(g => {
+                if (typeof g.gridX === 'number' && typeof g.gridY === 'number') {
+                    g.x = (g.gridX + 0.5) * gs;
+                    g.y = (g.gridY + 0.5) * gs;
+                }
+            });
+            this.prepareBackgroundGradients();
+            this.buildStaticLayers();
+        }
+        if (initial) window.addEventListener('resize', () => this.resizeToViewport(false));
+    }
+
+    // Basic haptic feedback using Vibration API (Android/Chrome). Safe no-op if unsupported.
+    hapticPulse(kind = 'light') {
+        try {
+            const mobile = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+            if (!mobile || !('vibrate' in navigator)) return;
+            switch (kind) {
+                case 'medium': navigator.vibrate(30); break;
+                case 'heavy': navigator.vibrate([20, 20, 20]); break;
+                case 'light':
+                default:
+                    navigator.vibrate(15);
+            }
+        } catch (e) {
+            // ignore
+        }
     }
     
     setupInputHandlers() {
