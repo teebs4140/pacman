@@ -132,6 +132,8 @@ class PacmanGame {
         this.canvas.focus();
         const ui = document.getElementById('gameUI');
         if (ui) ui.style.width = `${this.canvas.width}px`;
+        // Expose canvas width for CSS positioning if needed
+        document.documentElement.style.setProperty('--canvas-width', `${this.canvas.width}px`);
         
         // Set up input handlers
         this.setupInputHandlers();
@@ -201,6 +203,7 @@ class PacmanGame {
         this.canvas.height = rows * GAME_CONFIG.GRID_SIZE;
         const ui = document.getElementById('gameUI');
         if (ui) ui.style.width = `${this.canvas.width}px`;
+        document.documentElement.style.setProperty('--canvas-width', `${this.canvas.width}px`);
         if (!initial && this.pacman) {
             const gs = GAME_CONFIG.GRID_SIZE;
             this.pacman.x = (this.pacman.gridX + 0.5) * gs;
