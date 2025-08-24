@@ -9,6 +9,7 @@ Thumbs.db
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # Playwright screenshots and test files
 .playwright-mcp/
@@ -16,6 +17,9 @@ Thumbs.db
 # Example folders
 examples/
 example-pics/
+
+# Project management folders
+PRPs/
 
 # Editor directories and files
 .vscode/
