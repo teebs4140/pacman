@@ -9,7 +9,7 @@ A modern, fully interactive Pacman game built with HTML5 Canvas, CSS animations,
 
 ## 🚀 Play Now
 
-**[🎮 Play Pacman Game](https://yourusername.github.io/pacman)** _(Replace with your GitHub Pages URL)_
+**[🎮 Play Pacman Game](https://teebs4140.github.io/pacman)** 
 
 ## ✨ Features
 
